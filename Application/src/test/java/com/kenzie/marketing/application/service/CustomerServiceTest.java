@@ -2,9 +2,13 @@ package com.kenzie.marketing.application.service;
 
 import com.kenzie.marketing.application.controller.model.CreateCustomerRequest;
 import com.kenzie.marketing.application.controller.model.CustomerResponse;
+import com.kenzie.marketing.application.controller.model.LeaderboardUiEntry;
 import com.kenzie.marketing.application.repositories.CustomerRepository;
 import com.kenzie.marketing.application.repositories.model.CustomerRecord;
 
+import com.kenzie.marketing.referral.model.CustomerReferrals;
+import com.kenzie.marketing.referral.model.LeaderboardEntry;
+import com.kenzie.marketing.referral.model.Referral;
 import com.kenzie.marketing.referral.model.client.ReferralServiceClient;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +18,7 @@ import org.mockito.Matchers;
 import org.mockito.exceptions.base.MockitoAssertionError;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -207,5 +212,127 @@ public class CustomerServiceTest {
      *  ------------------------------------------------------------------------ **/
 
     // Write additional tests here
+    @Test
+    void deleteCustomer() {
+        // GIVEN
+        String customerName = "customerName";
 
+        CreateCustomerRequest request = new CreateCustomerRequest();
+        request.setName(customerName);
+        request.setReferrerId(Optional.empty());
+
+        CustomerRecord customerRecord = new CustomerRecord();
+        customerRecord.setId(randomUUID().toString());
+        customerRecord.setName(request.getName());
+        customerRecord.setDateCreated(LocalDateTime.now().toString());
+        customerRecord.setReferrerId(request.getReferrerId().orElse(null));
+
+        // WHEN
+        CustomerResponse returnedCustomer = customerService.addNewCustomer(request);
+
+        // THEN
+        customerService.deleteCustomer(returnedCustomer.getId());
+
+        verify(customerRepository).deleteById(returnedCustomer.getId());
+    }
+
+
+    /** ------------------------------------------------------------------------
+     *  customerService.getReferrals
+     *  ------------------------------------------------------------------------ **/
+
+    // Write additional tests here
+    @Test
+    void getReferrals_id() {
+        // GIVEN
+        String customerId = "customer id";
+        Optional<CustomerRecord> record = customerRepository.findById(customerId);
+        CustomerRecord rc = new CustomerRecord();
+        rc.setId(customerId);
+        //WHEN/THEN
+        customerRepository.save(rc);
+
+        when(customerRepository.findById(customerId)).thenReturn(Optional.of(rc));
+
+        List<CustomerResponse> responses = customerService.getReferrals(customerId);
+
+        when(customerService.getReferrals(customerId)).thenReturn(responses);
+
+        when(customerRepository.findById(customerId)).thenReturn(record);
+    }
+
+    /** ------------------------------------------------------------------------
+     *  customerService.calculateBonus
+     *  ------------------------------------------------------------------------ **/
+
+    // Write additional tests here
+    @Test
+    void calculateBonus() {
+        //GIVEN
+        Double REFERRAL_BONUS_FIRST_LEVEL = 10.0;
+        Double REFERRAL_BONUS_SECOND_LEVEL = 3.0;
+        Double REFERRAL_BONUS_THIRD_LEVEL = 1.0;
+
+        String customerId = "id";
+
+        String customerName = "customerName";
+        //WHEN
+        CreateCustomerRequest request = new CreateCustomerRequest();
+        request.setName(customerName);
+        request.setReferrerId(Optional.empty());
+        customerService.addNewCustomer(request);
+
+        CustomerReferrals referrals = mock(CustomerReferrals.class);
+
+        List<Referral> firstReferrals = referralServiceClient.getDirectReferrals(customerId);
+        referrals.setNumFirstLevelReferrals(firstReferrals.size());
+
+        int firstLevelReferrals = 0;
+        int secondLevelReferrals = 0;
+
+        for (Referral referral: firstReferrals) {
+            firstLevelReferrals += referralServiceClient.getDirectReferrals(referral.getCustomerId()).size();
+            for (Referral thirdReferral : referralServiceClient.getDirectReferrals(referral.getCustomerId())) {
+                secondLevelReferrals += referralServiceClient.getDirectReferrals(thirdReferral.getCustomerId()).size();
+            }
+        }
+
+        referrals.setNumSecondLevelReferrals(firstLevelReferrals);
+        referrals.setNumThirdLevelReferrals(secondLevelReferrals);
+
+        when(referralServiceClient.getReferralSummary(customerId)).thenReturn(referrals);
+
+        CustomerReferrals referrals2 = referralServiceClient.getReferralSummary(customerId);
+
+        when(referralServiceClient.getReferralSummary(customerId)).thenReturn(referrals2);
+    }
+
+
+
+    /** ------------------------------------------------------------------------
+     *  customerService.getLeaderboard
+     *  ------------------------------------------------------------------------ **/
+
+    // Write additional tests here
+    @Test
+    void getLeaderboard() {
+
+        List<LeaderboardEntry> board = referralServiceClient.getLeaderboard();
+
+        when(referralServiceClient.getLeaderboard()).thenReturn(board);
+
+        List<LeaderboardUiEntry> uiEntries = customerService.getLeaderboard();
+
+        when(customerService.getLeaderboard()).thenReturn(uiEntries);
+
+        LeaderboardUiEntry uiEntry = new LeaderboardUiEntry();
+        List<LeaderboardUiEntry> uiEntriess = new ArrayList<>();
+
+        for (LeaderboardEntry entry : board) {
+            verify(uiEntry).setCustomerId(entry.getCustomerId());
+            verify(uiEntry).setCustomerName("No name found");
+            verify(uiEntry).setNumReferrals(entry.getNumReferrals());
+            verify(uiEntriess).add(uiEntry);
+        }
+    }
 }

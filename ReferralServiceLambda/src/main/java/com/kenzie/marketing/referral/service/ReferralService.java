@@ -9,12 +9,15 @@ import com.kenzie.marketing.referral.service.converter.ReferralConverter;
 import com.kenzie.marketing.referral.service.dao.ReferralDao;
 import com.kenzie.marketing.referral.service.exceptions.InvalidDataException;
 import com.kenzie.marketing.referral.service.model.ReferralRecord;
+import com.kenzie.marketing.referral.service.task.ReferralTask;
 
 import javax.inject.Inject;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.concurrent.*;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class ReferralService {
 
@@ -34,14 +37,69 @@ public class ReferralService {
     }
 
     public List<LeaderboardEntry> getReferralLeaderboard() {
-        // Task 3 Code Here
-        return null;
+        List<ReferralRecord> nodes = referralDao.findUsersWithoutReferrerId();
+        List<LeaderboardEntry> threadsList = new ArrayList<>();
+        List<Future<List<LeaderboardEntry>>> threadFutures = new ArrayList<>();
+        List<LeaderboardEntry> topFive = new ArrayList<>();
+        Comparator<LeaderboardEntry> comparator = (o1, o2) -> o2.getNumReferrals() - o1.getNumReferrals();
+
+        for (ReferralRecord node : nodes) {
+            ReferralTask task = new ReferralTask(node, this);
+            threadFutures.add(executor.submit(task));
+        }
+
+        executor.shutdown();
+
+        try {
+            executor.awaitTermination(20, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Executor was interrupted " + e);
+        }
+
+        for (Future<List<LeaderboardEntry>> list : threadFutures) {
+            try {
+                List<LeaderboardEntry> leaderboardEntries = list.get();
+                if (leaderboardEntries != null) {
+                    threadsList.addAll(leaderboardEntries);
+                }
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            } catch (ExecutionException e) {
+                throw new RuntimeException(e.getCause());
+            }
+        }
+
+        threadsList.sort(comparator);
+
+        for (int i = 0; i < threadsList.size(); i++) {
+            if (i == 6) {
+                return topFive;
+            }
+            topFive.add(threadsList.get(i));
+        }
+
+        return topFive;
     }
 
-    public CustomerReferrals getCustomerReferralSummary(String customerId) {
+        public CustomerReferrals getCustomerReferralSummary(String customerId) {
         CustomerReferrals referrals = new CustomerReferrals();
 
         // Task 2 Code Here
+        List<Referral> directReferrals = getDirectReferrals(customerId);
+        referrals.setNumFirstLevelReferrals(directReferrals.size());
+
+        int firstLevelReferrals = 0;
+        int secondLevelReferrals = 0;
+
+        for (Referral referral: directReferrals) {
+            firstLevelReferrals += getDirectReferrals(referral.getCustomerId()).size();
+            for (Referral thirdReferral : getDirectReferrals(referral.getCustomerId())) {
+                secondLevelReferrals += getDirectReferrals(thirdReferral.getCustomerId()).size();
+            }
+        }
+
+        referrals.setNumSecondLevelReferrals(firstLevelReferrals);
+        referrals.setNumThirdLevelReferrals(secondLevelReferrals);
 
         return referrals;
     }
@@ -51,8 +109,9 @@ public class ReferralService {
         List<ReferralRecord> records = referralDao.findByReferrerId(customerId);
 
         // Task 1 Code Here
-
-        return null;
+        return records.stream()
+                .map(r -> new Referral(r.getCustomerId(), r.getReferrerId(), r.getDateReferred().toString()))
+                .collect(Collectors.toList());
     }
 
 

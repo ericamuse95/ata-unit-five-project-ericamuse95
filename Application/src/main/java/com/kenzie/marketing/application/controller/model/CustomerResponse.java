@@ -21,6 +21,8 @@ public class CustomerResponse {
     @JsonProperty("referrerId")
     private String referrerId;
 
+
+
     public String getId() {
         return id;
     }

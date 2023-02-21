@@ -15,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -44,8 +46,9 @@ public class CustomerService {
         List<CustomerRecord> records = StreamSupport.stream(customerRepository.findAll().spliterator(), true).collect(Collectors.toList());
 
         // Task 1 - Add your code here
-
-        return null;
+        return records.stream()
+                .map(this::toCustomerResponse)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -57,8 +60,10 @@ public class CustomerService {
         Optional<CustomerRecord> record = customerRepository.findById(customerId);
 
         // Task 1 - Add your code here
-
-        return null;
+        if(record.isEmpty()){
+            return null;
+        }
+        return toCustomerResponse(record.get());
     }
 
     /**
@@ -72,8 +77,34 @@ public class CustomerService {
     public CustomerResponse addNewCustomer(CreateCustomerRequest createCustomerRequest) {
 
         // Task 1 - Add your code here
+        if (createCustomerRequest.getReferrerId().isPresent() && createCustomerRequest.getReferrerId().get().length() == 0) {
+        createCustomerRequest.setReferrerId(Optional.empty());
+        }
 
-        return null;
+        if(createCustomerRequest.getReferrerId().isPresent()){
+            if(!customerRepository.existsById(createCustomerRequest.getReferrerId().get())){
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID does not exist");
+            }
+        }
+        CustomerRecord customerRecord = new CustomerRecord();
+        customerRecord.setId(randomUUID().toString());
+        customerRecord.setName(createCustomerRequest.getName());
+        customerRecord.setDateCreated(LocalDateTime.now().toString());
+        customerRecord.setReferrerId(createCustomerRequest.getReferrerId().orElse(null));
+
+        ReferralRequest referralRequest = new ReferralRequest();
+        referralRequest.setCustomerId(customerRecord.getId());
+        referralRequest.setReferrerId(customerRecord.getReferrerId());
+
+        customerRepository.save(customerRecord);
+
+        if (createCustomerRequest.getReferrerId().isPresent() && createCustomerRequest.getReferrerId().get().length() == 0) {
+            referralServiceClient.addReferral(new ReferralRequest(customerRecord.getId(), Optional.empty().toString()));
+        }
+
+        referralServiceClient.addReferral(referralRequest);
+
+        return toCustomerResponse(customerRecord);
     }
 
     /**
@@ -92,7 +123,7 @@ public class CustomerService {
 
         // Task 1 - Add your code here
 
-        return null;
+        return toCustomerResponse(customerRecord);
     }
 
     /**
@@ -128,8 +159,23 @@ public class CustomerService {
     public List<CustomerResponse> getReferrals(String customerId) {
 
         // Task 1 - Add your code here
+        if (customerId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ID does not exist");
+        }
 
-        return null;
+        // Task 1 - Add your code here
+        CustomerRecord record = customerRepository.findById(customerId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Customer Not Found"));
+
+        CustomerRecord referralRecord = new CustomerRecord();
+
+        return  referralServiceClient.getDirectReferrals(customerId).stream()
+                .peek(r -> referralRecord.setReferrerId(r.getReferrerId()))
+                .peek(r -> referralRecord.setId(r.getCustomerId()))
+                .peek(r -> referralRecord.setDateCreated(r.getReferralDate()))
+                .peek(r -> referralRecord.setName(record.getName()))
+                .map(r -> toCustomerResponse(referralRecord))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -139,8 +185,19 @@ public class CustomerService {
     public List<LeaderboardUiEntry> getLeaderboard() {
 
         // Task 2 - Add your code here
+        List<LeaderboardEntry> board = referralServiceClient.getLeaderboard();
+        List<LeaderboardUiEntry> uiEntries = new ArrayList<>();
 
-        return null;
+        for (LeaderboardEntry entry : board) {
+            LeaderboardUiEntry uiEntry = new LeaderboardUiEntry();
+            uiEntry.setCustomerId(entry.getCustomerId());
+            uiEntry.setCustomerName("No name found");
+            uiEntry.setNumReferrals(entry.getNumReferrals());
+            uiEntries.add(uiEntry);
+        }
+
+        return uiEntries;
+
     }
 
     /* -----------------------------------------------------------------------------------------------------------
@@ -148,5 +205,23 @@ public class CustomerService {
        ----------------------------------------------------------------------------------------------------------- */
 
     // Add any private methods here
+    private CustomerResponse toCustomerResponse(CustomerRecord record) {
+        if (record == null) {
+            return null;
+        }
+        CustomerResponse customerResponse = new CustomerResponse();
 
+        if (record.getReferrerId() != null && !record.getReferrerId().isEmpty()) {
+            if (customerRepository.findById(record.getReferrerId()).isPresent()) {
+                customerResponse.setReferrerName(customerRepository.findById(record.getReferrerId()).get().getName());
+            }
+        }
+
+        customerResponse.setId(record.getId());
+        customerResponse.setName(record.getName());
+        customerResponse.setDateJoined(record.getDateCreated());
+        customerResponse.setReferrerId(record.getReferrerId());
+
+        return customerResponse;
+    }
 }

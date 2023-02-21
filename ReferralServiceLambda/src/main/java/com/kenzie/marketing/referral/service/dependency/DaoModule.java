@@ -1,6 +1,9 @@
 package com.kenzie.marketing.referral.service.dependency;
 
 
+import com.kenzie.marketing.referral.service.caching.CacheClient;
+import com.kenzie.marketing.referral.service.caching.CachingReferralDao;
+import com.kenzie.marketing.referral.service.dao.NonCachingReferralDao;
 import com.kenzie.marketing.referral.service.dao.ReferralDao;
 import com.kenzie.marketing.referral.service.util.DynamoDbClientProvider;
 
@@ -16,7 +19,7 @@ import javax.inject.Singleton;
  * Provides DynamoDBMapper instance to DAO classes.
  */
 @Module(
-    includes = CachingModule.class
+        includes = CachingModule.class
 )
 public class DaoModule {
 
@@ -31,8 +34,20 @@ public class DaoModule {
     @Provides
     @Named("ReferralDao")
     @Inject
-    public ReferralDao provideReferralDao(@Named("DynamoDBMapper") DynamoDBMapper mapper) {
-        return new ReferralDao(mapper);
+    public ReferralDao provideReferralDao(
+            @Named("CacheClient") CacheClient cacheClient,
+            @Named("NonCachingReferralDao") NonCachingReferralDao nonCachingReferralDao) {
+        return new CachingReferralDao(cacheClient, nonCachingReferralDao);
     }
+
+    @Singleton
+    @Provides
+    @Named("NonCachingReferralDao")
+    @Inject
+    public NonCachingReferralDao provideNonCachingReferralDao(@Named("DynamoDBMapper") DynamoDBMapper mapper) {
+        return new NonCachingReferralDao(mapper);
+    }
+
+
 
 }

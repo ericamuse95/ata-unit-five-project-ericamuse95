@@ -5,6 +5,7 @@ import com.kenzie.marketing.application.controller.model.CustomerResponse;
 import com.kenzie.marketing.application.controller.model.CustomerUpdateRequest;
 import com.kenzie.marketing.application.controller.model.LeaderboardUiEntry;
 import com.kenzie.marketing.application.controller.model.ReferralBonusResponse;
+import com.kenzie.marketing.application.repositories.model.CustomerRecord;
 import com.kenzie.marketing.application.service.CustomerService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

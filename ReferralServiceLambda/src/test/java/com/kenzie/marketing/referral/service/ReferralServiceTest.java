@@ -1,14 +1,14 @@
 package com.kenzie.marketing.referral.service;
 
 
-import com.kenzie.marketing.referral.model.Referral;
-import com.kenzie.marketing.referral.model.ReferralRequest;
-import com.kenzie.marketing.referral.model.ReferralResponse;
+import com.kenzie.marketing.referral.model.*;
 import com.kenzie.marketing.referral.service.converter.ZonedDateTimeConverter;
 import com.kenzie.marketing.referral.service.dao.ReferralDao;
 import com.kenzie.marketing.referral.service.exceptions.InvalidDataException;
 import com.kenzie.marketing.referral.service.model.ReferralRecord;
+import com.kenzie.marketing.referral.service.task.ReferralTask;
 import net.andreinc.mockneat.MockNeat;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -19,6 +19,8 @@ import redis.clients.jedis.JedisPoolConfig;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -130,5 +132,80 @@ class ReferralServiceTest {
     }
 
     // Write additional tests here
+    @Test
+    public void getReferralsLeaders() throws Exception {
+        ExecutorService executor = mock(ExecutorService.class);
+        // GIVEN
+        String customerId = "customer1";
+        List<ReferralRecord> recordList = new ArrayList<>();
+
+        ReferralRecord record1 = new ReferralRecord();
+        record1.setCustomerId(customerId);
+        record1.setReferrerId(customerId);
+        record1.setDateReferred(ZonedDateTime.now());
+        recordList.add(record1);
+
+        ReferralRecord record2 = new ReferralRecord();
+        record2.setCustomerId("customer2");
+        record2.setReferrerId(customerId);
+        record2.setDateReferred(ZonedDateTime.now());
+        recordList.add(record2);
+
+        // WHEN
+        List<ReferralRecord> nodes = referralDao.findUsersWithoutReferrerId();
+
+        when(referralDao.findUsersWithoutReferrerId()).thenReturn(nodes);
+
+
+        List<LeaderboardEntry> leaderBoard = referralService.getReferralLeaderboard();
+
+        when (referralService.getReferralLeaderboard()).thenReturn(leaderBoard);
+
+        ReferralTask task = new ReferralTask(record1, referralService);
+
+        Future<List<LeaderboardEntry>> leaders = executor.submit(task);
+
+        when (executor.submit(task)).thenReturn(leaders);
+
+    }
+
+    @Test
+    void getCustomerReferralSummary() {
+        CustomerReferrals referrals = new CustomerReferrals();
+
+        String customerId = "customer1";
+        List<ReferralRecord> recordList = new ArrayList<>();
+
+        ReferralRecord record1 = new ReferralRecord();
+        record1.setCustomerId(customerId);
+        record1.setReferrerId(customerId);
+        record1.setDateReferred(ZonedDateTime.now());
+        recordList.add(record1);
+
+        ReferralRecord record2 = new ReferralRecord();
+        record2.setCustomerId("customer2");
+        record2.setReferrerId(customerId);
+        record2.setDateReferred(ZonedDateTime.now());
+        recordList.add(record2);
+
+        when(referralDao.findByReferrerId(customerId)).thenReturn(recordList);
+
+        List<Referral> firstReferrals = referralService.getDirectReferrals(customerId);
+
+        Assertions.assertEquals(2, firstReferrals.size());
+
+        referrals = referralService.getCustomerReferralSummary(customerId);
+
+    }
+
+
+    @Test
+    void testConstructor() {
+        ReferralDao dao = null;
+        ExecutorService executor = null;
+
+        ReferralService service = new ReferralService(dao, executor);
+    }
 
 }
+

@@ -14,6 +14,7 @@ public class CustomerRecord {
     private String dateCreated;
     private String referrerId;
 
+
     @DynamoDBHashKey(attributeName = "Id")
     public String getId() {
         return id;
